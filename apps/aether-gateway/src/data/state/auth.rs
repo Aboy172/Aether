@@ -1,15 +1,15 @@
 use super::{
     AuthApiKeyLookupKey, CreateManagementTokenRecord, DataLayerError, GatewayAuthApiKeySnapshot,
-    GatewayDataState, ManagementTokenListQuery, ProxyNodeHeartbeatMutation,
-    ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeRegistrationMutation,
-    ProxyNodeRemoteConfigMutation, ProxyNodeTrafficMutation, ProxyNodeTunnelStatusMutation,
-    RegenerateManagementTokenSecret, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
-    StoredLdapModuleConfig, StoredManagementToken, StoredManagementTokenListPage,
-    StoredManagementTokenWithUser, StoredOAuthProviderConfig, StoredOAuthProviderModuleConfig,
-    StoredProxyFleetMetricsBucket, StoredProxyNode, StoredProxyNodeEvent,
-    StoredProxyNodeMetricsBucket, StoredUserAuthRecord, StoredUserOAuthLinkSummary,
-    StoredUserPreferenceRecord, StoredUserSessionRecord, StoredWalletSnapshot,
-    UpdateManagementTokenRecord, UpsertOAuthProviderConfigRecord,
+    GatewayDataState, ManagementTokenCounterDelta, ManagementTokenListQuery, ProxyNodeCounterDelta,
+    ProxyNodeHeartbeatMutation, ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation,
+    ProxyNodeRegistrationMutation, ProxyNodeRemoteConfigMutation, ProxyNodeTrafficMutation,
+    ProxyNodeTunnelStatusMutation, RegenerateManagementTokenSecret, StoredAuthApiKeyExportRecord,
+    StoredAuthApiKeySnapshot, StoredLdapModuleConfig, StoredManagementToken,
+    StoredManagementTokenListPage, StoredManagementTokenWithUser, StoredOAuthProviderConfig,
+    StoredOAuthProviderModuleConfig, StoredProxyFleetMetricsBucket, StoredProxyNode,
+    StoredProxyNodeEvent, StoredProxyNodeMetricsBucket, StoredUserAuthRecord,
+    StoredUserOAuthLinkSummary, StoredUserPreferenceRecord, StoredUserSessionRecord,
+    StoredWalletSnapshot, UpdateManagementTokenRecord, UpsertOAuthProviderConfigRecord,
 };
 use crate::LocalMutationOutcome;
 use aether_data::repository::auth::{
@@ -1117,6 +1117,20 @@ impl GatewayDataState {
         token_id: &str,
         last_used_ip: Option<&str>,
     ) -> Result<Option<StoredManagementToken>, DataLayerError> {
+        if let Some(repository) = &self.usage_writer {
+            let enqueued = repository
+                .enqueue_management_token_counter_delta(ManagementTokenCounterDelta {
+                    token_id: token_id.to_string(),
+                    usage_count_delta: 1,
+                    last_used_at_unix_secs: Some(chrono::Utc::now().timestamp().max(0) as u64),
+                    last_used_ip: last_used_ip.map(ToOwned::to_owned),
+                })
+                .await?;
+            if enqueued {
+                return Ok(None);
+            }
+        }
+
         match &self.management_token_writer {
             Some(repository) => {
                 repository
@@ -1278,6 +1292,21 @@ impl GatewayDataState {
         &self,
         mutation: &ProxyNodeTrafficMutation,
     ) -> Result<bool, DataLayerError> {
+        if let Some(repository) = &self.usage_writer {
+            let enqueued = repository
+                .enqueue_proxy_node_counter_delta(ProxyNodeCounterDelta {
+                    node_id: mutation.node_id.clone(),
+                    total_requests_delta: mutation.total_requests_delta,
+                    failed_requests_delta: mutation.failed_requests_delta,
+                    dns_failures_delta: mutation.dns_failures_delta,
+                    stream_errors_delta: mutation.stream_errors_delta,
+                })
+                .await?;
+            if enqueued {
+                return Ok(true);
+            }
+        }
+
         match &self.proxy_node_writer {
             Some(repository) => repository.record_traffic(mutation).await,
             None => Ok(false),

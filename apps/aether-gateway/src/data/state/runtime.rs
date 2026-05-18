@@ -38,7 +38,7 @@ use aether_data_contracts::repository::usage::{
     PendingUsageCleanupSummary, ProviderApiKeyWindowUsageRequest,
     StoredProviderApiKeyWindowUsageSummary, StoredUsageDailySummary, UsageAuditListQuery,
     UsageCleanupExecutionMode, UsageCleanupSummary, UsageCleanupTargets, UsageCleanupWindow,
-    UsageDailyHeatmapQuery,
+    UsageCounterFlushSummary, UsageCounterHealthSnapshot, UsageDailyHeatmapQuery,
 };
 use aether_runtime_state::RuntimeQueueStore;
 use aether_video_tasks_core::read_data_backed_video_task_response;
@@ -954,6 +954,31 @@ impl GatewayDataState {
         }
     }
 
+    pub(crate) async fn flush_usage_counter_deltas(
+        &self,
+        batch_size: usize,
+    ) -> Result<UsageCounterFlushSummary, DataLayerError> {
+        match &self.usage_writer {
+            Some(repository) => repository.flush_usage_counter_deltas(batch_size).await,
+            None => Ok(UsageCounterFlushSummary::default()),
+        }
+    }
+
+    pub(crate) async fn cleanup_processed_usage_counter_deltas(
+        &self,
+        cutoff_unix_secs: u64,
+        batch_size: usize,
+    ) -> Result<usize, DataLayerError> {
+        match &self.usage_writer {
+            Some(repository) => {
+                repository
+                    .cleanup_processed_usage_counter_deltas(cutoff_unix_secs, batch_size)
+                    .await
+            }
+            None => Ok(0),
+        }
+    }
+
     pub(crate) async fn cleanup_stale_pending_requests(
         &self,
         cutoff_unix_secs: u64,
@@ -1116,6 +1141,15 @@ impl GatewayDataState {
             None => {
                 Ok(aether_data_contracts::repository::usage::StoredUsageAuditSummary::default())
             }
+        }
+    }
+
+    pub(crate) async fn read_usage_counter_health(
+        &self,
+    ) -> Result<UsageCounterHealthSnapshot, DataLayerError> {
+        match &self.usage_reader {
+            Some(repository) => repository.read_usage_counter_health().await,
+            None => Ok(UsageCounterHealthSnapshot::default()),
         }
     }
 

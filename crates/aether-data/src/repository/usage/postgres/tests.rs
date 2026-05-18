@@ -235,25 +235,6 @@ fn usage_sql_summarizes_usage_by_provider_api_key_ids_in_database() {
 }
 
 #[test]
-fn usage_sql_materializes_provider_key_window_usage_in_status_snapshot() {
-    assert!(super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL
-        .contains("UPDATE provider_api_keys AS keys"));
-    assert!(super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL.contains("jsonb_set"));
-    assert!(
-        super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL.contains("'{quota,windows}'")
-    );
-    assert!(super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL.contains("'usage'"));
-    assert!(
-        super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL.contains("WHEN '5h' THEN 300")
-    );
-    assert!(super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL
-        .contains("WHEN 'weekly' THEN 10080"));
-    assert!(
-        !super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL.contains("usage_billing_facts")
-    );
-}
-
-#[test]
 fn usage_sql_rebuilds_provider_key_window_usage_into_status_snapshot() {
     assert!(super::REBUILD_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_STATS_SQL
         .contains("UPDATE provider_api_keys AS keys"));
@@ -281,17 +262,43 @@ fn usage_sql_serializes_request_id_upserts_before_reading_previous_usage() {
 }
 
 #[test]
+fn usage_sql_moves_shared_counter_updates_behind_outbox() {
+    let source = include_str!("mod.rs");
+    assert!(super::INSERT_USAGE_COUNTER_DELTA_SQL.contains("usage_counter_deltas"));
+    assert!(super::CLAIM_USAGE_COUNTER_DELTAS_SQL.contains("FOR UPDATE SKIP LOCKED"));
+    assert!(super::MARK_USAGE_COUNTER_DELTAS_PROCESSED_SQL.contains("processed_at = NOW()"));
+    assert!(super::TRY_LOCK_USAGE_COUNTER_FLUSH_SQL.contains("pg_try_advisory_xact_lock"));
+    assert!(source.contains("enqueue_api_key_usage_delta_in_tx("));
+    assert!(source.contains("enqueue_provider_api_key_usage_delta_in_tx("));
+    assert!(source.contains("enqueue_model_usage_delta_in_tx("));
+    assert!(source.contains("apply_provider_api_key_main_usage_delta_in_tx("));
+    assert!(source.contains("USAGE_COUNTER_KIND_PROVIDER_MONTHLY"));
+    assert!(source.contains("apply_provider_monthly_usage_delta_in_tx("));
+}
+
+#[test]
+fn usage_sql_exposes_counter_outbox_health() {
+    assert!(super::READ_USAGE_COUNTER_HEALTH_SQL.contains("pending_rows"));
+    assert!(super::READ_USAGE_COUNTER_HEALTH_SQL.contains("oldest_pending_created_at_unix_secs"));
+    assert!(super::READ_USAGE_COUNTER_HEALTH_SQL.contains("latest_processed_at_unix_secs"));
+    assert!(super::READ_PENDING_USAGE_COUNTER_DELTAS_BY_KIND_SQL.contains("GROUP BY kind"));
+}
+
+#[test]
 fn usage_sql_rebuild_matches_online_api_key_usage_semantics() {
-    assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL.contains("COUNT(*)::INTEGER"));
+    assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL.contains("COUNT(*)::BIGINT"));
     assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL.contains("COALESCE("));
     assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL.contains("total_tokens,"));
     assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL
         .contains("COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)"));
     assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL.contains("AND BTRIM(api_key_id) <> ''"));
+    assert!(super::REBUILD_API_KEY_USAGE_STATS_SQL
+        .contains("AND status NOT IN ('pending', 'streaming')"));
 }
 
 #[test]
 fn usage_sql_rebuild_matches_online_provider_key_usage_semantics() {
+    assert!(super::REBUILD_PROVIDER_API_KEY_USAGE_STATS_SQL.contains("COUNT(*)::BIGINT"));
     assert!(super::REBUILD_PROVIDER_API_KEY_USAGE_STATS_SQL
         .contains("NULLIF(BTRIM(error_message), '') IS NULL"));
     assert!(super::REBUILD_PROVIDER_API_KEY_USAGE_STATS_SQL.contains("COALESCE("));
@@ -300,6 +307,8 @@ fn usage_sql_rebuild_matches_online_provider_key_usage_semantics() {
         .contains("COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)"));
     assert!(super::REBUILD_PROVIDER_API_KEY_USAGE_STATS_SQL
         .contains("AND BTRIM(provider_api_key_id) <> ''"));
+    assert!(super::REBUILD_PROVIDER_API_KEY_USAGE_STATS_SQL
+        .contains("AND status NOT IN ('pending', 'streaming')"));
 }
 
 #[test]
@@ -503,8 +512,7 @@ fn usage_sql_raw_aggregates_use_canonical_billing_facts() {
         .contains("FROM usage_billing_facts AS \"usage\""));
     assert!(super::SUMMARIZE_USAGE_TOTALS_BY_USER_IDS_SQL
         .contains("FROM usage_billing_facts AS \"usage\""));
-    assert!(!super::APPLY_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_DELTA_SQL
-        .contains("usage_billing_facts AS \"usage\""));
+    assert!(!source.contains("apply_provider_api_key_codex_window_usage_delta_in_tx"));
 }
 
 #[test]

@@ -1297,6 +1297,10 @@ name = "video_tasks_next_poll_idx"
 columns = ["next_poll_at"]
 
 [[table.video_tasks.indexes]]
+name = "video_tasks_due_poll_idx"
+columns = ["status", "next_poll_at", "updated_at"]
+
+[[table.video_tasks.indexes]]
 name = "video_tasks_user_status_idx"
 columns = ["user_id", "status"]
 

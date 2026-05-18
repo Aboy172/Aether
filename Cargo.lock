@@ -465,6 +465,7 @@ version = "0.1.0"
 dependencies = [
  "aether-contracts",
  "aether-data",
+ "aether-data-contracts",
  "aether-gateway",
  "aether-http",
  "aether-runtime",

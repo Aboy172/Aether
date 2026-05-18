@@ -174,6 +174,14 @@ CREATE INDEX IF NOT EXISTS idx_entitlement_usage_user_date ON public.entitlement
 
 
 --
+-- Name: idx_entitlement_usage_entitlement_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_entitlement_usage_entitlement_date ON public.entitlement_usage_ledgers USING btree (user_entitlement_id, usage_date);
+
+
+
+--
 -- Name: idx_provider_api_keys_provider_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -550,6 +558,30 @@ CREATE INDEX IF NOT EXISTS idx_usage_wallet_finalized ON public.usage USING btre
 
 
 --
+-- Name: ix_usage_counter_deltas_request_kind; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_request_kind ON public.usage_counter_deltas USING btree (request_id, kind, target_id);
+
+
+
+--
+-- Name: ix_usage_counter_deltas_processed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_processed ON public.usage_counter_deltas USING btree (processed_at, created_at, id) WHERE processed_at IS NOT NULL;
+
+
+
+--
+-- Name: ix_usage_counter_deltas_unprocessed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_unprocessed ON public.usage_counter_deltas USING btree (created_at, id) WHERE processed_at IS NULL;
+
+
+
+--
 -- Name: idx_user_model_usage_model; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -594,6 +626,14 @@ CREATE INDEX IF NOT EXISTS idx_video_tasks_external_id ON public.video_tasks USI
 --
 
 CREATE INDEX IF NOT EXISTS idx_video_tasks_next_poll ON public.video_tasks USING btree (next_poll_at);
+
+
+
+--
+-- Name: idx_video_tasks_due_poll; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX IF NOT EXISTS idx_video_tasks_due_poll ON public.video_tasks USING btree (status, next_poll_at, updated_at) WHERE next_poll_at IS NOT NULL;
 
 
 

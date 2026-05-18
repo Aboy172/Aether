@@ -132,8 +132,9 @@ use aether_data_contracts::repository::settlement::{
     SettlementWriteRepository, StoredUsageSettlement, UsageSettlementInput,
 };
 use aether_data_contracts::repository::usage::{
-    PendingUsageCleanupSummary, StoredProviderUsageSummary, StoredRequestUsageAudit,
-    UpsertUsageRecord, UsageReadRepository, UsageWriteRepository,
+    ApiKeyLastUsedDelta, ManagementTokenCounterDelta, PendingUsageCleanupSummary,
+    ProxyNodeCounterDelta, StoredProviderUsageSummary, StoredRequestUsageAudit, UpsertUsageRecord,
+    UsageReadRepository, UsageWriteRepository,
 };
 use aether_data_contracts::repository::video_tasks::{
     StoredVideoTask, UpsertVideoTask, VideoTaskLookupKey, VideoTaskModelCount,
@@ -310,6 +311,7 @@ impl fmt::Debug for GatewayDataState {
 }
 
 mod auth;
+mod candidate_cache;
 mod catalog;
 mod core;
 mod integrations;

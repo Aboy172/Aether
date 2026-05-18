@@ -286,6 +286,7 @@ CREATE TABLE IF NOT EXISTS video_tasks (
     UNIQUE KEY video_tasks_request_id_key (`request_id`),
     KEY video_tasks_external_id_idx (`external_task_id`),
     KEY video_tasks_next_poll_idx (`next_poll_at`),
+    KEY video_tasks_due_poll_idx (`status`, `next_poll_at`, `updated_at`),
     KEY video_tasks_user_status_idx (`user_id`, `status`),
     KEY video_tasks_api_key_id_idx (`api_key_id`),
     KEY video_tasks_provider_id_idx (`provider_id`),

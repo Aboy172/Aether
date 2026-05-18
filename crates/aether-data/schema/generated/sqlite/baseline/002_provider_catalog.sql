@@ -278,6 +278,7 @@ CREATE TABLE IF NOT EXISTS video_tasks (
 );
 CREATE INDEX IF NOT EXISTS video_tasks_external_id_idx ON video_tasks (external_task_id);
 CREATE INDEX IF NOT EXISTS video_tasks_next_poll_idx ON video_tasks (next_poll_at);
+CREATE INDEX IF NOT EXISTS video_tasks_due_poll_idx ON video_tasks (status, next_poll_at, updated_at);
 CREATE INDEX IF NOT EXISTS video_tasks_user_status_idx ON video_tasks (user_id, status);
 CREATE INDEX IF NOT EXISTS video_tasks_api_key_id_idx ON video_tasks (api_key_id);
 CREATE INDEX IF NOT EXISTS video_tasks_provider_id_idx ON video_tasks (provider_id);
