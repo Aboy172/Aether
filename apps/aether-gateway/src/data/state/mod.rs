@@ -142,6 +142,12 @@ use aether_data_contracts::repository::video_tasks::{
 };
 use aether_runtime_state::RuntimeQueueStore;
 
+pub(crate) use self::referrals::{
+    ReferralAdminStats, ReferralMutationStatus, ReferralRelationshipListQuery,
+    ReferralRelationshipRecord, ReferralRewardConfig, ReferralRewardListQuery,
+    ReferralRewardRecord, ReferralUserDashboard,
+};
+
 #[derive(Clone, Default)]
 pub(crate) struct GatewayDataState {
     config: GatewayDataConfig,
@@ -317,6 +323,7 @@ mod core;
 mod integrations;
 mod models;
 mod pool_scores;
+mod referrals;
 mod routing_profiles;
 mod runtime;
 #[cfg(test)]
