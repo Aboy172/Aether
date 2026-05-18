@@ -67,7 +67,10 @@ pub(crate) async fn maybe_build_local_openai_responses_decision_payload_for_cand
     let proxy = state
         .resolve_transport_proxy_snapshot_with_tunnel_affinity(&resolved.transport)
         .await;
-    let transport_profile = resolve_transport_profile(&resolved.transport);
+    let transport_profile = resolved
+        .transport_profile
+        .clone()
+        .or_else(|| resolve_transport_profile(&resolved.transport));
     let timeouts = resolve_transport_execution_timeouts(&resolved.transport);
     let mut extra_fields = serde_json::Map::new();
     if let Some(proxy_value) =
@@ -175,6 +178,7 @@ pub(crate) async fn maybe_build_local_openai_responses_decision_payload_for_cand
         envelope_name: _,
         upstream_is_stream,
         transport,
+        transport_profile: _,
     } = resolved;
 
     let mut decision = build_ai_execution_decision_response(AiExecutionDecisionResponseParts {
