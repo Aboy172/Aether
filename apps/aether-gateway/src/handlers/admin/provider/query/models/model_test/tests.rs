@@ -404,7 +404,9 @@ fn provider_query_compact_provider_body_builds_without_chat_conversion() {
         object.insert("stream".to_string(), serde_json::Value::Bool(false));
     }
 
-    assert!(provider_query_request_body_is_openai_responses_shape(&request_body));
+    assert!(provider_query_request_body_is_openai_responses_shape(
+        &request_body
+    ));
 
     let mut provider_request_body = crate::ai_serving::build_local_openai_responses_request_body(
         &request_body,
@@ -424,7 +426,10 @@ fn provider_query_compact_provider_body_builds_without_chat_conversion() {
     );
 
     assert_eq!(provider_request_body["model"], json!("upstream-gpt"));
-    assert_eq!(provider_request_body["input"], json!("hello compact provider"));
+    assert_eq!(
+        provider_request_body["input"],
+        json!("hello compact provider")
+    );
     assert!(provider_request_body.get("messages").is_none());
     assert!(provider_request_body.get("stream").is_none());
     assert!(provider_request_body.get("store").is_none());
