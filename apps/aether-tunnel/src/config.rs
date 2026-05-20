@@ -572,21 +572,11 @@ pub struct Config {
     pub tunnel_connect_timeout_ms: u64,
 
     /// Force direct WebSocket tunnel TCP connects, or Aether outbound proxy endpoint connects, to IPv4 addresses only.
-    #[arg(
-        long,
-        env = "AETHER_TUNNEL_IPV4_ONLY",
-        default_value_t = false,
-        conflicts_with = "tunnel_ipv6_only"
-    )]
+    #[arg(long, env = "AETHER_TUNNEL_IPV4_ONLY", default_value_t = false)]
     pub tunnel_ipv4_only: bool,
 
     /// Force direct WebSocket tunnel TCP connects, or Aether outbound proxy endpoint connects, to IPv6 addresses only.
-    #[arg(
-        long,
-        env = "AETHER_TUNNEL_IPV6_ONLY",
-        default_value_t = false,
-        conflicts_with = "tunnel_ipv4_only"
-    )]
+    #[arg(long, env = "AETHER_TUNNEL_IPV6_ONLY", default_value_t = false)]
     pub tunnel_ipv6_only: bool,
 
     /// WebSocket tunnel TCP keepalive in seconds (0 disables)
@@ -1643,8 +1633,8 @@ node_name = "tunnel-test"
     }
 
     #[test]
-    fn cli_rejects_conflicting_tunnel_ip_family_flags() {
-        let error = Config::try_parse_from([
+    fn cli_parses_conflicting_tunnel_ip_family_flags_before_validation() {
+        let config = Config::parse_from([
             "aether-tunnel",
             "--aether-url",
             "https://example.com",
@@ -1654,10 +1644,35 @@ node_name = "tunnel-test"
             "tunnel-test",
             "--tunnel-ipv4-only",
             "--tunnel-ipv6-only",
-        ])
-        .expect_err("conflicting tunnel IP-family flags should fail");
+        ]);
 
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert!(config.tunnel_ipv4_only);
+        assert!(config.tunnel_ipv6_only);
+        let error = config
+            .validate()
+            .expect_err("conflicting tunnel IP-family flags should fail validation");
+        assert!(error.to_string().contains("tunnel_ipv4_only"));
+    }
+
+    #[test]
+    fn cli_accepts_explicit_false_tunnel_ip_family_flags() {
+        let config = Config::parse_from([
+            "aether-tunnel",
+            "--aether-url",
+            "https://example.com",
+            "--management-token",
+            "ae_test",
+            "--node-name",
+            "tunnel-test",
+            "--tunnel-ipv4-only=false",
+            "--tunnel-ipv6-only=false",
+        ]);
+
+        assert!(!config.tunnel_ipv4_only);
+        assert!(!config.tunnel_ipv6_only);
+        config
+            .validate()
+            .expect("explicit false family flags should be valid");
     }
 
     #[test]
