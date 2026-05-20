@@ -739,8 +739,26 @@ fn provider_query_grok_image_test_uses_grok_app_chat_upstream_url() {
     let transport = sample_openai_image_transport("grok");
 
     assert_eq!(
-        provider_query_openai_image_test_upstream_url(&transport, Some("trace=1")),
+        provider_query_openai_image_test_upstream_url(
+            &transport,
+            Some("/v1/images/generations"),
+            Some("trace=1"),
+        ),
         "https://grok.com/rest/app-chat/conversations/new"
+    );
+}
+
+#[test]
+fn provider_query_custom_image_test_uses_images_upstream_url() {
+    let transport = sample_openai_image_transport("custom");
+
+    assert_eq!(
+        provider_query_openai_image_test_upstream_url(
+            &transport,
+            Some("/v1/images/generations"),
+            Some("trace=1"),
+        ),
+        "https://grok.com/v1/images/generations?trace=1"
     );
 }
 
@@ -749,7 +767,11 @@ fn provider_query_chatgpt_web_image_test_uses_internal_upstream_url() {
     let transport = sample_openai_image_transport("chatgpt_web");
 
     assert_eq!(
-        provider_query_openai_image_test_upstream_url(&transport, Some("trace=1")),
+        provider_query_openai_image_test_upstream_url(
+            &transport,
+            Some("/v1/images/generations"),
+            Some("trace=1"),
+        ),
         "https://grok.com/__aether/chatgpt-web-image"
     );
 }

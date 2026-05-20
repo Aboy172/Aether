@@ -172,7 +172,7 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
     } else if is_grok {
         build_grok_upstream_url(transport, GROK_CHAT_PATH)
     } else {
-        build_openai_image_upstream_url(transport, parts.uri.query())
+        build_openai_image_upstream_url(transport, Some(parts.uri.path()), parts.uri.query())
     };
     let mut provider_request_body = if is_chatgpt_web {
         match build_chatgpt_web_image_request_body(parts, body_json, body_base64) {

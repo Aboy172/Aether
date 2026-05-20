@@ -1798,6 +1798,7 @@ fn provider_query_chatgpt_web_image_internal_url(base_url: &str) -> String {
 
 fn provider_query_openai_image_test_upstream_url(
     transport: &AdminGatewayProviderTransportSnapshot,
+    request_path: Option<&str>,
     request_query: Option<&str>,
 ) -> String {
     if transport
@@ -1818,7 +1819,11 @@ fn provider_query_openai_image_test_upstream_url(
             crate::provider_transport::GROK_CHAT_PATH,
         )
     } else {
-        crate::provider_transport::build_openai_image_upstream_url(transport, request_query)
+        crate::provider_transport::build_openai_image_upstream_url(
+            transport,
+            request_path,
+            request_query,
+        )
     }
 }
 
@@ -2062,7 +2067,11 @@ async fn provider_query_execute_openai_image_test_candidate(
     } else {
         normalized_request.summary_json.clone()
     };
-    let request_url = provider_query_openai_image_test_upstream_url(&transport, parts.uri.query());
+    let request_url = provider_query_openai_image_test_upstream_url(
+        &transport,
+        Some(parts.uri.path()),
+        parts.uri.query(),
+    );
     let upstream_is_stream = provider_request_body
         .get("stream")
         .and_then(Value::as_bool)

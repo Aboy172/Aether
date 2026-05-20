@@ -1315,9 +1315,29 @@ fn build_sse_body_stream(
 }
 
 fn stream_chunk_contains_sse_done(chunk: &[u8]) -> bool {
-    std::str::from_utf8(chunk)
-        .ok()
-        .is_some_and(|text| text.lines().any(|line| line.trim() == "data: [DONE]"))
+    std::str::from_utf8(chunk).ok().is_some_and(|text| {
+        text.lines().any(|line| {
+            let line = line.trim();
+            if matches!(
+                line,
+                "data: [DONE]" | "event: message_stop" | "event: response.completed"
+            ) {
+                return true;
+            }
+            let Some(data) = line.strip_prefix("data:").map(str::trim) else {
+                return false;
+            };
+            data == "[DONE]"
+                || serde_json::from_str::<serde_json::Value>(data).is_ok_and(|value| {
+                    value
+                        .get("type")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|event_type| {
+                            matches!(event_type, "message_stop" | "response.completed")
+                        })
+                })
+        })
+    })
 }
 
 async fn next_stream_frame<R>(
@@ -3364,7 +3384,7 @@ mod tests {
         build_sse_body_stream, execute_execution_runtime_stream, execute_stream_from_frame_stream,
         maybe_apply_kiro_prompt_cache_usage_to_stream_summary, merge_stream_terminal_summary,
         should_limit_direct_finalize_prefetch, should_probe_success_failover_before_stream,
-        should_skip_direct_finalize_prefetch,
+        should_skip_direct_finalize_prefetch, stream_chunk_contains_sse_done,
     };
     use crate::control::GatewayControlDecision;
     use crate::tunnel::{tunnel_protocol, TunnelProxyConn};
@@ -3379,6 +3399,20 @@ mod tests {
             Some("openai:chat".to_string()),
         )
         .with_execution_runtime_candidate(true)
+    }
+
+    #[test]
+    fn detects_client_visible_sse_terminal_events() {
+        assert!(stream_chunk_contains_sse_done(b"data: [DONE]\n\n"));
+        assert!(stream_chunk_contains_sse_done(
+            b"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+        ));
+        assert!(stream_chunk_contains_sse_done(
+            b"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n"
+        ));
+        assert!(!stream_chunk_contains_sse_done(
+            b"event: content_block_delta\ndata: {\"type\":\"content_block_delta\"}\n\n"
+        ));
     }
 
     fn tunnel_proxy_snapshot(base_url: String) -> aether_contracts::ProxySnapshot {
