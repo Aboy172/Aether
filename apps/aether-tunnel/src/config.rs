@@ -572,11 +572,27 @@ pub struct Config {
     pub tunnel_connect_timeout_ms: u64,
 
     /// Force direct WebSocket tunnel TCP connects, or Aether outbound proxy endpoint connects, to IPv4 addresses only.
-    #[arg(long, env = "AETHER_TUNNEL_IPV4_ONLY", default_value_t = false)]
+    #[arg(
+        long,
+        env = "AETHER_TUNNEL_IPV4_ONLY",
+        default_value_t = false,
+        action = clap::ArgAction::Set,
+        default_missing_value = "true",
+        num_args = 0..=1,
+        require_equals = true
+    )]
     pub tunnel_ipv4_only: bool,
 
     /// Force direct WebSocket tunnel TCP connects, or Aether outbound proxy endpoint connects, to IPv6 addresses only.
-    #[arg(long, env = "AETHER_TUNNEL_IPV6_ONLY", default_value_t = false)]
+    #[arg(
+        long,
+        env = "AETHER_TUNNEL_IPV6_ONLY",
+        default_value_t = false,
+        action = clap::ArgAction::Set,
+        default_missing_value = "true",
+        num_args = 0..=1,
+        require_equals = true
+    )]
     pub tunnel_ipv6_only: bool,
 
     /// WebSocket tunnel TCP keepalive in seconds (0 disables)
