@@ -11,12 +11,16 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 MODE="auto"
 COMPOSE_DIR=""
 APP_SERVICE="app"
+COMPOSE_WAIT_TIMEOUT_SECS=120
+COMPOSE_HEALTHCHECK_POLL_INTERVAL_SECS=2
 NO_PULL=false
 FORCE_RECREATE=false
 SHOW_LOGS=false
 LOCAL_BUILD=false
 PREPARE_ONLY=false
 COMPOSE_FILES=()
+COMPOSE=()
+COMPOSE_ARGS=()
 
 usage() {
     cat <<'EOF'
@@ -121,13 +125,33 @@ if [[ "${MODE}" == "local-build" || "${LOCAL_BUILD}" == "true" ]]; then
     exec bash "${deploy_script}" "${args[@]}"
 fi
 
-if docker compose version >/dev/null 2>&1; then
-    COMPOSE=(docker compose)
-elif command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE=(docker-compose)
-else
+resolve_compose_cli() {
+    if [[ "${#COMPOSE[@]}" -gt 0 ]]; then
+        return
+    fi
+
+    if docker compose version >/dev/null 2>&1; then
+        COMPOSE=(docker compose)
+        return
+    fi
+
+    if command -v docker-compose >/dev/null 2>&1; then
+        COMPOSE=(docker-compose)
+        return
+    fi
+
     die "docker compose or docker-compose is required"
-fi
+}
+
+compose() {
+    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" "$@"
+}
+
+compose_config() {
+    compose config "$@"
+}
+
+resolve_compose_cli
 
 docker info >/dev/null 2>&1 || die "Docker is not running"
 
@@ -145,7 +169,7 @@ resolve_compose_file() {
     fi
 }
 
-if [[ "${#COMPOSE_FILES[@]}" -eq 0 ]]; then
+resolve_default_compose_files() {
     case "${MODE}" in
         compose)
             COMPOSE_FILES=("docker-compose.yml")
@@ -167,13 +191,12 @@ if [[ "${#COMPOSE_FILES[@]}" -eq 0 ]]; then
             fi
             ;;
     esac
+}
 
-    if [[ -f "${COMPOSE_DIR}/docker-compose.update.yml" ]]; then
-        COMPOSE_FILES+=("docker-compose.update.yml")
-    fi
+if [[ "${#COMPOSE_FILES[@]}" -eq 0 ]]; then
+    resolve_default_compose_files
 fi
 
-COMPOSE_ARGS=()
 COMPOSE_ARGS+=(--project-directory "${COMPOSE_DIR}")
 for file in "${COMPOSE_FILES[@]}"; do
     resolved_file="$(resolve_compose_file "${file}")"
@@ -181,7 +204,7 @@ for file in "${COMPOSE_FILES[@]}"; do
     COMPOSE_ARGS+=(-f "${resolved_file}")
 done
 
-services="$("${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" config --services)"
+services="$(compose_config --services)"
 if ! grep -qx "${APP_SERVICE}" <<< "${services}"; then
     die "service '${APP_SERVICE}' not found in compose config"
 fi
@@ -189,35 +212,36 @@ fi
 echo ">>> Compose directory: ${COMPOSE_DIR}"
 echo ">>> App service: ${APP_SERVICE}"
 
-if [[ "${PREPARE_ONLY}" == "true" ]]; then
-    echo ">>> Preparing update by pulling latest image for ${APP_SERVICE}..."
-    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" pull "${APP_SERVICE}"
-    echo ">>> Done."
-    echo ">>> Note: image is downloaded. Recreate ${APP_SERVICE} to apply the update."
-    exit 0
-fi
+compose_pull_app() {
+    compose pull "${APP_SERVICE}"
+}
 
-if [[ "${NO_PULL}" != "true" ]]; then
-    echo ">>> Pulling latest image for ${APP_SERVICE}..."
-    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" pull "${APP_SERVICE}"
-fi
+compose_up_app() {
+    local wait_for_health="${1:-false}"
+    local -a up_args=(up -d)
 
-has_healthcheck() {
-    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" config 2>/dev/null \
-        | grep -q "healthcheck:" 2>/dev/null
+    if [[ "${FORCE_RECREATE}" == "true" ]]; then
+        up_args+=(--force-recreate)
+    fi
+    if [[ "${wait_for_health}" == "true" ]]; then
+        up_args+=(--wait --wait-timeout "${COMPOSE_WAIT_TIMEOUT_SECS}")
+    fi
+
+    up_args+=("${APP_SERVICE}")
+    compose "${up_args[@]}"
 }
 
 wait_healthy() {
-    local timeout="${1:-120}"
+    local timeout="${1:-${COMPOSE_WAIT_TIMEOUT_SECS}}"
     local elapsed=0
     echo ">>> Waiting for ${APP_SERVICE} to become healthy (timeout ${timeout}s)..."
     while (( elapsed < timeout )); do
         local container_id
         local state
-        container_id="$("${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" ps -q "${APP_SERVICE}" 2>/dev/null | head -n 1)"
+        container_id="$(compose ps -q "${APP_SERVICE}" 2>/dev/null | head -n 1)"
         if [[ -z "${container_id}" ]]; then
-            sleep 2
-            elapsed=$(( elapsed + 2 ))
+            sleep "${COMPOSE_HEALTHCHECK_POLL_INTERVAL_SECS}"
+            elapsed=$(( elapsed + COMPOSE_HEALTHCHECK_POLL_INTERVAL_SECS ))
             continue
         fi
         state="$(docker inspect --format='{{.State.Health.Status}}' \
@@ -226,48 +250,38 @@ wait_healthy() {
             echo ">>> Container is healthy."
             return 0
         fi
-        sleep 2
-        elapsed=$(( elapsed + 2 ))
+        sleep "${COMPOSE_HEALTHCHECK_POLL_INTERVAL_SECS}"
+        elapsed=$(( elapsed + COMPOSE_HEALTHCHECK_POLL_INTERVAL_SECS ))
     done
     echo ">>> WARNING: health check timed out after ${timeout}s."
     return 1
 }
 
-# Update execution.
-# When a healthcheck is defined we use --wait so compose blocks until
-# the new container passes health, reducing observable downtime.
-
-up_args=(up -d)
-if [[ "${FORCE_RECREATE}" == "true" ]]; then
-    up_args+=(--force-recreate)
+if [[ "${PREPARE_ONLY}" == "true" ]]; then
+    echo ">>> Preparing update by pulling latest image for ${APP_SERVICE}..."
+    compose_pull_app
+    echo ">>> Done."
+    echo ">>> Note: image is downloaded. Recreate ${APP_SERVICE} to apply the update."
+    exit 0
 fi
 
-# Compose v2.20+ supports --wait; older versions may reject it.
-if has_healthcheck; then
-    up_args+=(--wait --wait-timeout 120)
+if [[ "${NO_PULL}" != "true" ]]; then
+    echo ">>> Pulling latest image for ${APP_SERVICE}..."
+    compose_pull_app
 fi
-up_args+=("${APP_SERVICE}")
 
 echo ">>> Recreating ${APP_SERVICE}..."
-"${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" "${up_args[@]}" || {
+compose_up_app true || {
     echo ">>> Compose up with --wait failed; falling back to simple recreate..."
-    fallback_up_args=(up -d)
-    if [[ "${FORCE_RECREATE}" == "true" ]]; then
-        fallback_up_args+=(--force-recreate)
-    fi
-    fallback_up_args+=("${APP_SERVICE}")
-    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" "${fallback_up_args[@]}"
-    if has_healthcheck; then
-        wait_healthy 120 || true
-    fi
+    compose_up_app false
+    wait_healthy || true
 }
 
 echo ">>> Current services:"
-"${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" ps
+compose ps
 
 echo ">>> Done."
-echo ">>> Note: this is a one-click app container update, not a no-restart hot patch."
 
 if [[ "${SHOW_LOGS}" == "true" ]]; then
-    "${COMPOSE[@]}" "${COMPOSE_ARGS[@]}" logs -f "${APP_SERVICE}"
+    compose logs -f "${APP_SERVICE}"
 fi

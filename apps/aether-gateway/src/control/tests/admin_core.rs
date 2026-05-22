@@ -253,6 +253,18 @@ fn classifies_admin_system_update_routes_as_admin_proxy_routes() {
             "/api/admin/system/apply-update",
             "apply_update",
         ),
+        (http::Method::POST, "/api/admin/system/rollback", "rollback"),
+        (http::Method::GET, "/api/admin/system/releases", "releases"),
+        (
+            http::Method::GET,
+            "/api/admin/system/update-history",
+            "update_history",
+        ),
+        (
+            http::Method::GET,
+            "/api/admin/system/update-status",
+            "update_status",
+        ),
     ];
 
     for (method, path, expected_kind) in cases {
