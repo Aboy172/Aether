@@ -467,6 +467,15 @@
                         >
                           <Shield class="w-3.5 h-3.5" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="h-7 w-7"
+                          title="按此 Key 自动勾选同名模型"
+                          @click="handleAutoMatchKeyModels(key)"
+                        >
+                          <ListChecks class="w-3.5 h-3.5" />
+                        </Button>
                         <!-- 代理节点配置 -->
                         <Popover
                           :open="proxyPopoverOpenKeyId === key.id"
@@ -1323,7 +1332,8 @@
     :open="batchAssignDialogOpen"
     :provider-id="provider.id"
     :provider-name="provider.name"
-    @update:open="batchAssignDialogOpen = $event"
+    :auto-match-key="batchAssignAutoMatchKey"
+    @update:open="handleBatchAssignDialogOpenUpdate"
     @changed="handleBatchAssignChanged"
   />
 
@@ -1368,6 +1378,7 @@ import {
   ShieldX,
   Globe,
   GitBranch,
+  ListChecks,
 } from 'lucide-vue-next'
 import { parseApiError } from '@/utils/errorParser'
 import { useEscapeKey } from '@/composables/useEscapeKey'
@@ -1464,6 +1475,12 @@ interface ProviderEndpointWithKeys extends ProviderEndpoint {
   rpm_limit?: number
 }
 
+interface BatchAssignAutoMatchKey {
+  id: string
+  name?: string | null
+  api_key_masked?: string | null
+}
+
 interface Props {
   providerId: string | null
   open: boolean
@@ -1530,6 +1547,7 @@ const revealedKeys = ref<Map<string, string>>(new Map())
 const modelFormDialogOpen = ref(false)
 const editingModel = ref<Model | null>(null)
 const batchAssignDialogOpen = ref(false)
+const batchAssignAutoMatchKey = ref<BatchAssignAutoMatchKey | null>(null)
 const modelMappingTabRef = ref<InstanceType<typeof ModelMappingTab> | null>(null)
 
 // 密钥列表拖拽排序状态
@@ -1738,6 +1756,7 @@ watch(
       oauthKeyEditDialogOpen.value = false
       deleteKeyConfirmOpen.value = false
       batchAssignDialogOpen.value = false
+      batchAssignAutoMatchKey.value = null
       antigravityQuotaDialogOpen.value = false
       antigravityQuotaDialogKey.value = null
 
@@ -3088,7 +3107,24 @@ function handleEditModel(model: Model) {
 
 // 处理打开批量关联对话框
 function handleBatchAssign() {
+  batchAssignAutoMatchKey.value = null
   batchAssignDialogOpen.value = true
+}
+
+function handleAutoMatchKeyModels(key: EndpointAPIKey) {
+  batchAssignAutoMatchKey.value = {
+    id: key.id,
+    name: key.name,
+    api_key_masked: key.api_key_masked,
+  }
+  batchAssignDialogOpen.value = true
+}
+
+function handleBatchAssignDialogOpenUpdate(value: boolean) {
+  batchAssignDialogOpen.value = value
+  if (!value) {
+    batchAssignAutoMatchKey.value = null
+  }
 }
 
 // 处理批量关联完成
